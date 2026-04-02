@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  role           String
+  phone          String?
+  avatarUrl      String?   @map("avatar_url")
+  isActive       Boolean   @default(true) @map("is_active")
+  suspendedUntil DateTime? @map("suspended_until")
+  resetToken     String?   @map("reset_token")
+  resetTokenExp  DateTime? @map("reset_token_exp")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  assignedLeads  Lead[]                @relation("LeadAssignedTo")
+  createdLeads   Lead[]                @relation("LeadCreatedBy")
+  activities     Activity[]
+  quotes         Quote[]               @relation("QuoteApprovedBy")
+  targets        Target[]
+  auditLogs      AuditLog[]
+  productNotes   ProductNote[]
+  assignedBrands ProductManagerBrand[]
+
+  @@map("users")
+}
+
+model ProductManagerBrand {
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  brandId String @map("brand_id")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, brandId])
+  @@map("product_manager_brands")
+}
+
+model Brand {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  logoUrl         String?  @map("logo_url")
+  countryOfOrigin String?  @map("country_of_origin")
+  description     String?
+  websiteUrl      String?  @map("website_url")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  categories  ProductCategory[]
+  products    Product[]
+  assignedPMs ProductManagerBrand[]
+
+  @@map("brands")
+}
+
+model ProductCategory {
+  id          String   @id @default(cuid())
+  brandId     String   @map("brand_id")
+  name        String
+  productType String   @map("product_type")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  brand    Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id                 String   @id @default(cuid())
+  categoryId         String   @map("category_id")
+  brandId            String   @map("brand_id")
+  sku                String?  @unique
+  modelNumber        String?  @map("model_number")
+  modelName          String   @map("model_name")
+  description        String?
+  productType        String   @map("product_type")
+  salePrice          Float?   @map("sale_price")
+  rentalDailyRate    Float?   @map("rental_daily_rate")
+  rentalWeeklyRate   Float?   @map("rental_weekly_rate")
+  rentalMonthlyRate  Float?   @map("rental_monthly_rate")
+  serviceRatePerHour Float?   @map("service_rate_per_hour")
+  unit               String   @default("piece")
+  minimumOrderQty    Int      @default(1) @map("minimum_order_qty")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  category       ProductCategory @relation(fields: [categoryId], references: [id])
+  brand          Brand           @relation(fields: [brandId], references: [id])
+  leadProducts   LeadProduct[]
+  quoteLineItems QuoteLineItem[]
+
+  @@map("products")
+}
+
+model Customer {
+  id                 String   @id @default(cuid())
+  companyName        String   @map("company_name")
+  industry           String
+  registrationNumber String?  @map("registration_number")
+  taxId              String?  @map("tax_id")
+  billingAddress     String?  @map("billing_address")
+  website            String?
+  tier               String   @default("PROSPECT")
+  assignedRepId      String?  @map("assigned_rep_id")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  sites CustomerSite[]
+  leads Lead[]
+
+  @@map("customers")
+}
+
+model CustomerSite {
+  id               String    @id @default(cuid())
+  customerId       String    @map("customer_id")
+  siteName         String    @map("site_name")
+  siteType         String    @map("site_type")
+  address          String?
+  province         String?
+  country          String    @default("Thailand")
+  projectStartDate DateTime? @map("project_start_date")
+  projectEndDate   DateTime? @map("project_end_date")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  contacts SiteContact[]
+  leads    Lead[]
+
+  @@map("customer_sites")
+}
+
+model SiteContact {
+  id        String   @id @default(cuid())
+  siteId    String   @map("site_id")
+  name      String
+  title     String?
+  phone     String?
+  email     String?
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  site CustomerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_contacts")
+}
+
+model Lead {
+  id                    String    @id @default(cuid())
+  title                 String
+  customerId            String    @map("customer_id")
+  siteId                String?   @map("site_id")
+  serviceLine           String    @map("service_line")
+  status                String    @default("NEW")
+  priority              String    @default("MEDIUM")
+  dealValue             Float?    @map("deal_value")
+  rentalDurationDays    Int?      @map("rental_duration_days")
+  serviceContractMonths Int?      @map("service_contract_months")
+  expectedCloseDate     DateTime? @map("expected_close_date")
+  lostReason            String?   @map("lost_reason")
+  lostToCompetitor      String?   @map("lost_to_competitor")
+  assignedToId          String    @map("assigned_to_id")
+  createdById           String    @map("created_by_id")
+  notes                 String?
+  decisionMakerName     String?   @map("decision_maker_name")
+  decisionMakerTitle    String?   @map("decision_maker_title")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  site         CustomerSite? @relation(fields: [siteId], references: [id])
+  assignedTo   User          @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  createdBy    User          @relation("LeadCreatedBy", fields: [createdById], references: [id])
+  products     LeadProduct[]
+  activities   Activity[]
+  quotes       Quote[]
+  productNotes ProductNote[]
+  tags         LeadTag[]
+
+  @@map("leads")
+}
+
+model LeadProduct {
+  id         String  @id @default(cuid())
+  leadId     String  @map("lead_id")
+  productId  String  @map("product_id")
+  quantity   Int     @default(1)
+  unitPrice  Float   @map("unit_price")
+  rentalDays Int?    @map("rental_days")
+  notes      String?
+
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("lead_products")
+}
+
+model ProductNote {
+  id        String   @id @default(cuid())
+  leadId    String   @map("lead_id")
+  authorId  String   @map("author_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("product_notes")
+}
+
+model Activity {
+  id           String    @id @default(cuid())
+  leadId       String    @map("lead_id")
+  userId       String    @map("user_id")
+  type         String
+  subject      String
+  description  String?
+  location     String?
+  scheduledAt  DateTime? @map("scheduled_at")
+  completedAt  DateTime? @map("completed_at")
+  outcome      String?
+  followUpDate DateTime? @map("follow_up_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("activities")
+}
+
+model Quote {
+  id           String    @id @default(cuid())
+  leadId       String    @map("lead_id")
+  quoteNumber  String    @unique @map("quote_number")
+  version      Int       @default(1)
+  status       String    @default("DRAFT")
+  subtotal     Float     @default(0)
+  taxRate      Float     @default(7) @map("tax_rate")
+  taxAmount    Float     @default(0) @map("tax_amount")
+  discount     Float     @default(0)
+  total        Float     @default(0)
+  validUntil   DateTime? @map("valid_until")
+  notes        String?
+  approvedById String?   @map("approved_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  lead       Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  approvedBy User?           @relation("QuoteApprovedBy", fields: [approvedById], references: [id])
+  lineItems  QuoteLineItem[]
+
+  @@map("quotes")
+}
+
+model QuoteLineItem {
+  id          String  @id @default(cuid())
+  quoteId     String  @map("quote_id")
+  productId   String? @map("product_id")
+  description String
+  qty         Int     @default(1)
+  unitPrice   Float   @map("unit_price")
+  discount    Float   @default(0)
+  subtotal    Float
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("quote_line_items")
+}
+
+model Target {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  period           String
+  targetType       String   @map("target_type")
+  serviceLineFocus String?  @map("service_line_focus")
+  targetValue      Float    @map("target_value")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("targets")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String
+
+  leads LeadTag[]
+
+  @@map("tags")
+}
+
+model LeadTag {
+  leadId String @map("lead_id")
+  tagId  String @map("tag_id")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@map("lead_tags")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  oldValue   String?  @map("old_value")
+  newValue   String?  @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Settings {
+  id          String   @id @default("singleton")
+  companyName String   @default("xCRM") @map("company_name")
+  taxRate     Float    @default(7) @map("tax_rate")
+  currency    String   @default("THB")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
