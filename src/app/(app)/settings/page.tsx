@@ -25,7 +25,7 @@ interface TeamUser {
 interface Brand { id: string; name: string }
 
 export default function SettingsPage() {
-  const { user } = useAuthStore()
+  const { user, isLoading } = useAuthStore()
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('general')
   const [saved, setSaved] = useState(false)
@@ -40,9 +40,10 @@ export default function SettingsPage() {
   })
 
   useEffect(() => {
+    if (isLoading) return
     if (user?.role !== 'ADMIN') { router.replace('/dashboard'); return }
     apiGet<SettingsData & { id: string }>('/api/settings').then((s) => reset(s)).catch(() => {})
-  }, [user, router, reset])
+  }, [isLoading, user, router, reset])
 
   useEffect(() => {
     if (tab === 'users') {

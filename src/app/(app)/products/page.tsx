@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Package, Globe, Tag } from 'lucide-react'
+import { Package, Globe, Tag, Plus } from 'lucide-react'
 import { apiGet } from '@/lib/apiClient'
+import { useAuthStore } from '@/store/authStore'
 import type { Brand } from '@/types'
 
 function BrandCard({ brand }: { brand: Brand }) {
@@ -57,31 +58,51 @@ function BrandCard({ brand }: { brand: Brand }) {
 }
 
 export default function ProductsPage() {
+  const { user } = useAuthStore()
+  const [isPending, startTransition] = useTransition()
   const [brands, setBrands] = useState<Brand[]>([])
-  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const canManage = user?.role === 'ADMIN' || user?.role === 'PRODUCT_MANAGER'
 
   useEffect(() => {
-    apiGet<Brand[]>('/api/products')
-      .then(setBrands)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    startTransition(async () => {
+      try {
+        const data = await apiGet<Brand[]>('/api/products')
+        setBrands(data)
+        setError(null)
+      } catch {
+        setError('Failed to load brands')
+      }
+    })
   }, [])
 
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
-      <div>
-        <h1
-          className="text-xl font-bold text-gray-100"
-          style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-        >
-          Product Catalog
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">Browse brands and product categories</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1
+            className="text-xl font-bold text-gray-100"
+            style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+          >
+            Product Catalog
+          </h1>
+          <p className="text-xs text-gray-500 mt-0.5">Browse brands and product categories</p>
+        </div>
+        {canManage && (
+          <Link
+            href="/products/brands/new"
+            className="flex items-center gap-2 px-3 py-2 bg-amber-400 hover:bg-amber-300 text-black rounded-lg text-sm font-semibold transition-colors flex-shrink-0"
+          >
+            <Plus size={14} />
+            New Brand
+          </Link>
+        )}
       </div>
 
       {/* Brand grid */}
-      {loading ? (
+      {isPending || (brands.length === 0 && error === null) ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
             <div
@@ -90,13 +111,19 @@ export default function ProductsPage() {
             />
           ))}
         </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-gray-500 text-sm">{error}</p>
+        </div>
       ) : brands.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Package size={40} className="text-gray-700 mb-3" />
           <p className="text-gray-500 text-sm">No brands found</p>
-          <p className="text-gray-600 text-xs mt-1">
-            Brands will appear here once assigned to your account.
-          </p>
+          {canManage && (
+            <Link href="/products/brands/new" className="mt-3 text-xs text-amber-400 hover:text-amber-300">
+              + Add your first brand
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

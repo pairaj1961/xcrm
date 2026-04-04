@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Globe, Package, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Globe, Package, ExternalLink, ChevronDown, ChevronUp, Pencil, Plus } from 'lucide-react'
 import { apiGet } from '@/lib/apiClient'
 import { cn } from '@/lib/cn'
 import { formatCurrency } from '@/utils/format'
+import { useAuthStore } from '@/store/authStore'
 import type { ProductType } from '@/types'
 
 interface ProductRow {
@@ -166,23 +168,27 @@ function CategorySection({ category }: { category: CategoryWithProducts }) {
 export default function BrandDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { user } = useAuthStore()
+  const canManage = user?.role === 'ADMIN' || user?.role === 'PRODUCT_MANAGER'
+  const [isPending, startTransition] = useTransition()
   const [brand, setBrand] = useState<BrandDetail | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
-    setLoading(true)
-    apiGet<BrandDetail>(`/api/products/brands/${id}`)
-      .then(setBrand)
-      .catch((err) => {
+    startTransition(async () => {
+      try {
+        const data = await apiGet<BrandDetail>(`/api/products/brands/${id}`)
+        setBrand(data)
+        setError(null)
+      } catch (err) {
         console.error(err)
         setError('Failed to load brand')
-      })
-      .finally(() => setLoading(false))
+      }
+    })
   }, [id])
 
-  if (loading) {
+  if (isPending || (brand === null && error === null)) {
     return (
       <div className="p-4 md:p-6 space-y-4 animate-pulse">
         <div className="h-6 bg-[#1e1e1e] rounded w-32" />
@@ -262,6 +268,24 @@ export default function BrandDetailPage() {
             <p className="text-sm text-gray-400 mt-2 ml-[52px]">{brand.description}</p>
           )}
         </div>
+        {canManage && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link
+              href={`/products/brands/${id}/edit`}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 border border-[#262626] rounded-lg hover:border-[#333] hover:text-gray-200 transition-colors"
+            >
+              <Pencil size={12} />
+              Edit
+            </Link>
+            <Link
+              href={`/products/brands/${id}/products/new`}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-400 text-black rounded-lg hover:bg-amber-300 transition-colors"
+            >
+              <Plus size={12} />
+              Add Product
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Categories with products */}

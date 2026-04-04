@@ -62,7 +62,7 @@ export default function QuotesPage() {
         </select>
         <div className="flex-1" />
         <Link
-          href="/leads"
+          href="/quotes/new"
           className="flex items-center gap-2 px-3 py-2 bg-amber-400 hover:bg-amber-300 text-black rounded-lg text-sm font-semibold transition-colors"
         >
           <Plus size={14} />

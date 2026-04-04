@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -149,23 +149,25 @@ function SiteCard({
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
-    setLoading(true)
-    apiGet<CustomerDetail>(`/api/customers/${id}`)
-      .then(setCustomer)
-      .catch((err) => {
+    startTransition(async () => {
+      try {
+        const data = await apiGet<CustomerDetail>(`/api/customers/${id}`)
+        setCustomer(data)
+        setError(null)
+      } catch (err) {
         console.error(err)
         setError('Failed to load customer')
-      })
-      .finally(() => setLoading(false))
+      }
+    })
   }, [id])
 
-  if (loading) {
+  if (isPending || (customer === null && error === null)) {
     return (
       <div className="p-4 md:p-6 space-y-4 animate-pulse">
         <div className="h-6 bg-[#1e1e1e] rounded w-32" />
