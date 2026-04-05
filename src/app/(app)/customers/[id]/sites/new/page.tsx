@@ -6,6 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Check, Loader2, Plus, Trash2 } from 'lucide-react'
+import { type Resolver } from 'react-hook-form'
 import { apiGet, apiPost } from '@/lib/apiClient'
 import { cn } from '@/lib/cn'
 import type { Customer } from '@/types'
@@ -47,7 +48,7 @@ export default function NewSitePage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<FormData>,
     defaultValues: { siteType: 'CONSTRUCTION_SITE', country: 'Thailand', contacts: [] },
   })
 

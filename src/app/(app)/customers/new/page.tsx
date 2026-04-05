@@ -1,18 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Check, Loader2 } from 'lucide-react'
-import { apiPost } from '@/lib/apiClient'
+import { apiPost, apiGet } from '@/lib/apiClient'
 import type { Customer } from '@/types'
+
+interface RepUser {
+  id: string
+  firstName: string
+  lastName: string
+}
 
 const schema = z.object({
   companyName: z.string().min(1, 'Company name is required'),
   industry: z.enum(['CONSTRUCTION', 'INDUSTRIAL_FACTORY', 'OTHER']),
   tier: z.enum(['PROSPECT', 'ACTIVE', 'VIP', 'INACTIVE']),
+  assignedRepId: z.string().optional(),
   billingAddress: z.string().optional(),
   website: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -33,6 +40,8 @@ function FieldError({ message }: { message?: string }) {
 
 export default function NewCustomerPage() {
   const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [reps, setReps] = useState<RepUser[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -40,6 +49,15 @@ export default function NewCustomerPage() {
     resolver: zodResolver(schema),
     defaultValues: { tier: 'PROSPECT', industry: 'CONSTRUCTION' },
   })
+
+  useEffect(() => {
+    startTransition(async () => {
+      try {
+        const data = await apiGet<RepUser[]>('/api/users?role=REP')
+        setReps(data)
+      } catch { /* non-critical */ }
+    })
+  }, [])
 
   async function onSubmit(data: FormData) {
     setSubmitting(true)
@@ -49,6 +67,7 @@ export default function NewCustomerPage() {
         companyName: data.companyName,
         industry: data.industry,
         tier: data.tier,
+        assignedRepId: data.assignedRepId || null,
         billingAddress: data.billingAddress || null,
         website: data.website || null,
         registrationNumber: data.registrationNumber || null,
@@ -105,6 +124,16 @@ export default function NewCustomerPage() {
               <option value="INACTIVE">Inactive</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1.5">Assigned Rep</label>
+          <select {...register('assignedRepId')} className={fieldClass()}>
+            <option value="">— Unassigned —</option>
+            {reps.map((r) => (
+              <option key={r.id} value={r.id}>{r.firstName} {r.lastName}</option>
+            ))}
+          </select>
         </div>
 
         <div>

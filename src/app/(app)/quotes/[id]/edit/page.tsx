@@ -1,28 +1,34 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Check, Loader2, Plus, Trash2 } from 'lucide-react'
 import { type Resolver } from 'react-hook-form'
-import { apiGet, apiPost } from '@/lib/apiClient'
+import { apiGet, apiPatch } from '@/lib/apiClient'
 
-interface Lead {
+interface QuoteDetail {
   id: string
-  title: string
-  customer?: { companyName: string } | null
-}
-
-interface LeadsResponse {
-  data: Lead[]
+  quoteNumber: string
+  status: string
+  notes?: string | null
+  validUntil?: string | null
+  taxRate: number
+  subtotal: number
+  taxAmount: number
   total: number
-  totalPages: number
-}
-
-interface Quote {
-  id: string
+  lead?: { id: string; title: string; customer?: { companyName: string } | null } | null
+  lineItems: Array<{
+    id: string
+    description: string
+    qty: number
+    unitPrice: number
+    discount: number
+    subtotal: number
+    product?: { id: string; modelName: string; sku?: string | null } | null
+  }>
 }
 
 const lineItemSchema = z.object({
@@ -33,9 +39,8 @@ const lineItemSchema = z.object({
 })
 
 const schema = z.object({
-  leadId: z.string().min(1, 'Lead is required'),
   validUntil: z.string().optional(),
-  taxRate: z.coerce.number().min(0).max(100).optional(),
+  taxRate: z.coerce.number().min(0).max(100),
   notes: z.string().optional(),
   lineItems: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
@@ -51,54 +56,59 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-red-400 mt-1">{message}</p>
 }
 
-export default function NewQuotePage() {
+export default function EditQuotePage() {
+  const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const defaultLeadId = searchParams.get('leadId') ?? ''
-
   const [isPending, startTransition] = useTransition()
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [quoteInfo, setQuoteInfo] = useState<{ number: string; leadTitle: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    watch,
-    formState: { errors },
-  } = useForm<FormData>({
+  const { register, handleSubmit, control, reset, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
-    defaultValues: {
-      leadId: defaultLeadId,
-      taxRate: 7,
-      lineItems: [{ description: '', qty: 1, unitPrice: 0, discount: 0 }],
-    },
+    defaultValues: { taxRate: 7, lineItems: [{ description: '', qty: 1, unitPrice: 0, discount: 0 }] },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lineItems' })
 
   useEffect(() => {
+    if (!id) return
     startTransition(async () => {
       try {
-        const res = await apiGet<LeadsResponse>('/api/leads?pageSize=100&status=NEW,CONTACTED,SITE_VISIT_SCHEDULED,QUOTE_SENT,NEGOTIATION')
-        setLeads(res.data)
+        const q = await apiGet<QuoteDetail>(`/api/quotes/${id}`)
+        if (q.status !== 'DRAFT') {
+          router.replace(`/quotes/${id}`)
+          return
+        }
+        setQuoteInfo({
+          number: q.quoteNumber,
+          leadTitle: q.lead ? `${q.lead.title}${q.lead.customer ? ` — ${q.lead.customer.companyName}` : ''}` : '',
+        })
+        reset({
+          validUntil: q.validUntil ? q.validUntil.split('T')[0] : '',
+          taxRate: q.taxRate,
+          notes: q.notes ?? '',
+          lineItems: q.lineItems.map((li) => ({
+            description: li.description,
+            qty: li.qty,
+            unitPrice: li.unitPrice,
+            discount: li.discount,
+          })),
+        })
+        setLoadError(null)
       } catch {
-        // leads remain empty
+        setLoadError('Failed to load quote')
       }
     })
-  }, [])
+  }, [id, reset, router])
 
   const watchedItems = watch('lineItems')
   const taxRate = watch('taxRate') ?? 7
 
   const subtotal = watchedItems?.reduce((sum, item) => {
-    const qty = Number(item.qty) || 0
-    const price = Number(item.unitPrice) || 0
-    const disc = Number(item.discount) || 0
-    return sum + qty * price * (1 - disc / 100)
+    return sum + (Number(item.qty) || 0) * (Number(item.unitPrice) || 0) * (1 - (Number(item.discount) || 0) / 100)
   }, 0) ?? 0
-
   const taxAmount = subtotal * (Number(taxRate) / 100)
   const total = subtotal + taxAmount
 
@@ -110,10 +120,9 @@ export default function NewQuotePage() {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const quote = await apiPost<Quote>('/api/quotes', {
-        leadId: data.leadId,
+      await apiPatch(`/api/quotes/${id}`, {
         validUntil: data.validUntil ? new Date(data.validUntil).toISOString() : null,
-        taxRate: data.taxRate != null ? Number(data.taxRate) : undefined,
+        taxRate: Number(data.taxRate),
         notes: data.notes || null,
         lineItems: data.lineItems.map((item) => ({
           description: item.description,
@@ -122,21 +131,45 @@ export default function NewQuotePage() {
           discount: Number(item.discount) || 0,
         })),
       })
-      router.push(`/quotes/${quote.id}`)
+      router.push(`/quotes/${id}`)
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to create quote')
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save quote')
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (isPending) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-4 animate-pulse">
+        <div className="h-6 bg-[#1e1e1e] rounded w-40" />
+        <div className="h-32 bg-[#111111] border border-[#262626] rounded-xl" />
+        <div className="h-48 bg-[#111111] border border-[#262626] rounded-xl" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 flex flex-col items-center gap-3">
+        <p className="text-gray-500 text-sm">{loadError}</p>
+        <button onClick={() => router.back()} className="text-xs text-amber-400 hover:text-amber-300">Go back</button>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.push('/quotes')} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors">
+        <button onClick={() => router.push(`/quotes/${id}`)} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-semibold text-gray-100">New Quote</h1>
+        <div>
+          <h1 className="text-lg font-semibold text-gray-100">
+            Edit Quote {quoteInfo?.number && <span className="font-mono text-amber-400">{quoteInfo.number}</span>}
+          </h1>
+          {quoteInfo?.leadTitle && <p className="text-xs text-gray-500">{quoteInfo.leadTitle}</p>}
+        </div>
       </div>
 
       {submitError && (
@@ -146,59 +179,22 @@ export default function NewQuotePage() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Lead + Meta */}
+        {/* Meta */}
         <div className="bg-[#111111] border border-[#262626] rounded-xl p-4 space-y-4">
           <h2 className="text-xs text-gray-500 uppercase tracking-wider">Quote Details</h2>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
-              Lead <span className="text-red-400">*</span>
-            </label>
-            {isPending ? (
-              <div className="h-9 bg-[#1a1a1a] rounded-lg animate-pulse" />
-            ) : (
-              <select {...register('leadId')} className={fieldClass()}>
-                <option value="">Select a lead…</option>
-                {leads.map((lead) => (
-                  <option key={lead.id} value={lead.id}>
-                    {lead.title}{lead.customer ? ` — ${lead.customer.companyName}` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            <FieldError message={errors.leadId?.message} />
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Valid Until</label>
-              <input
-                {...register('validUntil')}
-                type="date"
-                className={fieldClass()}
-              />
+              <input {...register('validUntil')} type="date" className={fieldClass()} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Tax Rate (%)</label>
-              <input
-                {...register('taxRate')}
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                className={fieldClass()}
-              />
+              <input {...register('taxRate')} type="number" min="0" max="100" step="0.01" className={fieldClass()} />
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Notes</label>
-            <textarea
-              {...register('notes')}
-              rows={2}
-              placeholder="Any notes for this quote…"
-              className={`${fieldClass()} resize-none`}
-            />
+            <textarea {...register('notes')} rows={2} className={`${fieldClass()} resize-none`} />
           </div>
         </div>
 
@@ -211,12 +207,10 @@ export default function NewQuotePage() {
               onClick={() => append({ description: '', qty: 1, unitPrice: 0, discount: 0 })}
               className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors"
             >
-              <Plus size={13} />
-              Add Item
+              <Plus size={13} /> Add Item
             </button>
           </div>
 
-          {/* Header row */}
           <div className="grid grid-cols-[1fr_72px_100px_72px_32px] gap-2 px-4 py-2 border-b border-[#1a1a1a] bg-[#0d0d0d]">
             <span className="text-[10px] text-gray-600 uppercase tracking-wider">Description</span>
             <span className="text-[10px] text-gray-600 uppercase tracking-wider text-center">Qty</span>
@@ -238,24 +232,17 @@ export default function NewQuotePage() {
                 </div>
                 <input
                   {...register(`lineItems.${index}.qty`)}
-                  type="number"
-                  min="1"
+                  type="number" min="1"
                   className="w-full px-2 py-1.5 text-sm bg-transparent border border-[#2a2a2a] rounded text-gray-300 text-center focus:outline-none focus:border-amber-500/50"
                 />
                 <input
                   {...register(`lineItems.${index}.unitPrice`)}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
+                  type="number" min="0" step="0.01" placeholder="0.00"
                   className="w-full px-2 py-1.5 text-sm bg-transparent border border-[#2a2a2a] rounded text-gray-300 text-right focus:outline-none focus:border-amber-500/50"
                 />
                 <input
                   {...register(`lineItems.${index}.discount`)}
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0"
+                  type="number" min="0" max="100" placeholder="0"
                   className="w-full px-2 py-1.5 text-sm bg-transparent border border-[#2a2a2a] rounded text-gray-300 text-center focus:outline-none focus:border-amber-500/50"
                 />
                 <button
@@ -287,12 +274,10 @@ export default function NewQuotePage() {
           </div>
         </div>
 
-        <FieldError message={errors.lineItems?.root?.message ?? (errors.lineItems as { message?: string } | undefined)?.message} />
-
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => router.push('/quotes')}
+            onClick={() => router.push(`/quotes/${id}`)}
             className="px-4 py-2.5 text-sm text-gray-400 border border-[#262626] rounded-lg hover:border-[#333333] hover:text-gray-300 transition-colors"
           >
             Cancel
@@ -302,7 +287,7 @@ export default function NewQuotePage() {
             disabled={submitting}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium bg-amber-400 text-black rounded-lg hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {submitting ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Create Quote</>}
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Save Changes</>}
           </button>
         </div>
       </form>

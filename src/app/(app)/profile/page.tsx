@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { apiGet, apiPut, apiPost } from '@/lib/apiClient'
 import { useAuthStore } from '@/store/authStore'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Loader2, CheckCircle, LogOut } from 'lucide-react'
 
 const profileSchema = z.object({
   firstName: z.string().min(1),
@@ -22,10 +23,17 @@ const pwSchema = z.object({
 type PwData = z.infer<typeof pwSchema>
 
 export default function ProfilePage() {
-  const { user, setUser } = useAuthStore()
+  const { user, setUser, logout } = useAuthStore()
+  const router = useRouter()
   const [profileSaved, setProfileSaved] = useState(false)
   const [pwSaved, setPwSaved] = useState(false)
   const [pwError, setPwError] = useState('')
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    logout()
+    router.push('/login')
+  }
 
   const profileForm = useForm<ProfileData>({ resolver: zodResolver(profileSchema) })
   const pwForm = useForm<PwData>({ resolver: zodResolver(pwSchema) })
@@ -127,6 +135,17 @@ export default function ProfilePage() {
           {pwSaved ? 'Password Changed!' : 'Change Password'}
         </button>
       </form>
+
+      {/* Logout */}
+      <div className="bg-[#111111] border border-[#262626] rounded-xl p-4">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-colors"
+        >
+          <LogOut size={14} />
+          Sign Out
+        </button>
+      </div>
     </div>
   )
 }

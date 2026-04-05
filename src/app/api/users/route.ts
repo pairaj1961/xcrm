@@ -24,25 +24,31 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? ''
   const role = searchParams.get('role') ?? ''
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(search ? { OR: [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ] } : {}),
-      ...(role ? { role } : {}),
-    },
-    select: {
-      id: true, email: true, firstName: true, lastName: true, role: true,
-      phone: true, isActive: true, createdAt: true,
-      assignedBrands: { include: { brand: { select: { id: true, name: true } } } },
-      _count: { select: { assignedLeads: { where: { status: { notIn: ['CLOSED_WON', 'CLOSED_LOST'] } } } } },
-    },
-    orderBy: [{ role: 'asc' }, { firstName: 'asc' }],
-  })
-
-  return NextResponse.json(users)
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        ...(search ? { OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ] } : {}),
+        ...(role ? { role } : {}),
+      },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, role: true,
+        phone: true, isActive: true, createdAt: true,
+        manager: { select: { id: true, firstName: true, lastName: true } },
+        subordinates: { select: { id: true, firstName: true, lastName: true, isActive: true } },
+        assignedBrands: { select: { brand: { select: { id: true, name: true } } } },
+        _count: { select: { assignedLeads: true } },
+      },
+      orderBy: [{ role: 'asc' }, { firstName: 'asc' }],
+    })
+    return NextResponse.json(users)
+  } catch (err) {
+    console.error('[GET /api/users]', err)
+    return NextResponse.json({ error: 'Internal server error', detail: String(err) }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -88,5 +94,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     id: newUser.id, email: newUser.email, firstName: newUser.firstName,
     lastName: newUser.lastName, role: newUser.role, isActive: newUser.isActive,
+    tempPassword,
   }, { status: 201 })
 }

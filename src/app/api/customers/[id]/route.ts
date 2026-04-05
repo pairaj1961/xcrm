@@ -56,7 +56,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     if (!customer) return notFound('Customer not found')
 
-    return NextResponse.json(customer)
+    let assignedRep = null
+    if (customer.assignedRepId) {
+      assignedRep = await prisma.user.findUnique({
+        where: { id: customer.assignedRepId },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    }
+
+    return NextResponse.json({ ...customer, assignedRep })
   } catch (err) {
     console.error('[GET /api/customers/[id]]', err)
     return serverError()

@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Search, Plus, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { apiGet, apiPost } from '@/lib/apiClient'
+import { Search, Plus, Building2, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
+import { apiGet, apiDelete } from '@/lib/apiClient'
+import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/cn'
 import { formatRelativeDate } from '@/utils/format'
 import type { Customer, CustomerTier, CustomerIndustry, PaginatedResponse } from '@/types'
@@ -45,20 +46,22 @@ function TierBadge({ tier }: { tier: CustomerTier }) {
 }
 
 export default function CustomersPage() {
+  const { user } = useAuthStore()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [tier, setTier] = useState('')
   const [industry, setIndustry] = useState('')
 
+  const isAdmin = user?.role === 'ADMIN'
   const PAGE_SIZE = 20
 
-  // Debounce search input
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(t)
@@ -67,14 +70,10 @@ export default function CustomersPage() {
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: String(PAGE_SIZE),
-      })
+      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (tier) params.set('tier', tier)
       if (industry) params.set('industry', industry)
-
       const res = await apiGet<PaginatedResponse<Customer>>(`/api/customers?${params.toString()}`)
       setCustomers(res.data)
       setTotal(res.total)
@@ -86,13 +85,22 @@ export default function CustomersPage() {
     }
   }, [page, debouncedSearch, tier, industry])
 
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, tier, industry])
+  useEffect(() => { setPage(1) }, [debouncedSearch, tier, industry])
+  useEffect(() => { fetchCustomers() }, [fetchCustomers])
 
-  useEffect(() => {
-    fetchCustomers()
-  }, [fetchCustomers])
+  async function handleDelete(c: Customer) {
+    if (!confirm(`Delete "${c.companyName}"?\n\nThis will permanently remove the customer and all associated data.`)) return
+    setDeletingId(c.id)
+    try {
+      await apiDelete(`/api/customers/${c.id}`)
+      setCustomers((prev) => prev.filter((x) => x.id !== c.id))
+      setTotal((t) => t - 1)
+    } catch {
+      alert('Failed to delete customer')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -108,8 +116,7 @@ export default function CustomersPage() {
           href="/customers/new"
           className="flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-black text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
         >
-          <Plus size={14} />
-          New Customer
+          <Plus size={14} /> New Customer
         </Link>
       </div>
 
@@ -125,27 +132,13 @@ export default function CustomersPage() {
             className="w-full bg-[#111111] border border-[#262626] rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-400/50 transition-colors"
           />
         </div>
-        <select
-          value={tier}
-          onChange={(e) => setTier(e.target.value)}
-          className="bg-[#111111] border border-[#262626] rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-400/50 transition-colors"
-        >
-          {TIER_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} className="bg-[#111111]">
-              {o.label}
-            </option>
-          ))}
+        <select value={tier} onChange={(e) => setTier(e.target.value)}
+          className="bg-[#111111] border border-[#262626] rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-400/50 transition-colors">
+          {TIER_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-[#111111]">{o.label}</option>)}
         </select>
-        <select
-          value={industry}
-          onChange={(e) => setIndustry(e.target.value)}
-          className="bg-[#111111] border border-[#262626] rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-400/50 transition-colors"
-        >
-          {INDUSTRY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} className="bg-[#111111]">
-              {o.label}
-            </option>
-          ))}
+        <select value={industry} onChange={(e) => setIndustry(e.target.value)}
+          className="bg-[#111111] border border-[#262626] rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-400/50 transition-colors">
+          {INDUSTRY_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-[#111111]">{o.label}</option>)}
         </select>
       </div>
 
@@ -169,10 +162,8 @@ export default function CustomersPage() {
             <Building2 size={32} className="text-gray-700 mb-3" />
             <p className="text-gray-500 text-sm">No customers found</p>
             {(search || tier || industry) && (
-              <button
-                onClick={() => { setSearch(''); setTier(''); setIndustry('') }}
-                className="mt-2 text-xs text-amber-400 hover:text-amber-300"
-              >
+              <button onClick={() => { setSearch(''); setTier(''); setIndustry('') }}
+                className="mt-2 text-xs text-amber-400 hover:text-amber-300">
                 Clear filters
               </button>
             )}
@@ -220,13 +211,26 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-right text-gray-500 text-xs hidden lg:table-cell">
                       {formatRelativeDate(c.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/customers/${c.id}`}
-                        className="text-xs text-gray-600 group-hover:text-amber-400 transition-colors font-medium"
-                      >
-                        View
-                      </Link>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link href={`/customers/${c.id}`}
+                          className="px-2 py-1 text-xs text-gray-500 hover:text-gray-200 hover:bg-[#1e1e1e] rounded-lg transition-colors">
+                          View
+                        </Link>
+                        <Link href={`/customers/${c.id}/edit`}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-amber-400 hover:bg-amber-400/5 rounded-lg transition-colors">
+                          <Pencil size={11} /> Edit
+                        </Link>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDelete(c)}
+                            disabled={deletingId === c.id}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-colors disabled:opacity-40"
+                          >
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -243,21 +247,13 @@ export default function CustomersPage() {
             Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
           </p>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-1.5 rounded-lg border border-[#262626] text-gray-500 hover:text-gray-300 hover:border-[#333] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+              className="p-1.5 rounded-lg border border-[#262626] text-gray-500 hover:text-gray-300 hover:border-[#333] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs text-gray-500 px-2">
-              {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-1.5 rounded-lg border border-[#262626] text-gray-500 hover:text-gray-300 hover:border-[#333] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
+            <span className="text-xs text-gray-500 px-2">{page} / {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              className="p-1.5 rounded-lg border border-[#262626] text-gray-500 hover:text-gray-300 hover:border-[#333] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               <ChevronRight size={14} />
             </button>
           </div>

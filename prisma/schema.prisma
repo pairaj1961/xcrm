@@ -19,9 +19,12 @@ model User {
   suspendedUntil DateTime? @map("suspended_until")
   resetToken     String?   @map("reset_token")
   resetTokenExp  DateTime? @map("reset_token_exp")
+  managerId      String?   @map("manager_id")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
+  manager        User?                 @relation("ManagerSubordinates", fields: [managerId], references: [id])
+  subordinates   User[]                @relation("ManagerSubordinates")
   assignedLeads  Lead[]                @relation("LeadAssignedTo")
   createdLeads   Lead[]                @relation("LeadCreatedBy")
   activities     Activity[]

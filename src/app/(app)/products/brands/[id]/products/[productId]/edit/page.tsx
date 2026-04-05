@@ -7,16 +7,27 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { type Resolver } from 'react-hook-form'
-import { apiGet, apiPost } from '@/lib/apiClient'
+import { apiGet, apiPatch } from '@/lib/apiClient'
 
-interface Category {
+interface ProductData {
   id: string
-  name: string
-  productType: string
+  modelName: string
+  modelNumber?: string | null
+  sku?: string | null
+  description?: string | null
+  productType: 'EQUIPMENT' | 'CONSUMABLE' | 'ACCESSORY'
+  unit: string
+  minimumOrderQty: number
+  salePrice?: number | null
+  rentalDailyRate?: number | null
+  rentalWeeklyRate?: number | null
+  rentalMonthlyRate?: number | null
+  serviceRatePerHour?: number | null
+  isActive: boolean
+  category: { id: string; name: string; productType: string }
 }
 
 const schema = z.object({
-  categoryId: z.string().min(1, 'Category is required'),
   modelName: z.string().min(1, 'Model name is required'),
   modelNumber: z.string().optional(),
   sku: z.string().optional(),
@@ -43,58 +54,53 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-red-400 mt-1">{message}</p>
 }
 
-function PriceField({ label, name, register }: { label: string; name: Parameters<typeof register>[0]; register: ReturnType<typeof useForm<FormData>>['register'] }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
-      <input
-        {...register(name)}
-        type="number"
-        min="0"
-        step="0.01"
-        placeholder="0.00"
-        className={fieldClass()}
-      />
-    </div>
-  )
-}
-
-export default function NewProductPage() {
-  const { id: brandId } = useParams<{ id: string }>()
+export default function EditProductPage() {
+  const { id: brandId, productId } = useParams<{ id: string; productId: string }>()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [categories, setCategories] = useState<Category[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [categoryName, setCategoryName] = useState('')
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
-    defaultValues: {
-      productType: 'EQUIPMENT',
-      unit: 'piece',
-      minimumOrderQty: 1,
-      isActive: true,
-    },
+    defaultValues: { isActive: true, minimumOrderQty: 1 },
   })
 
   useEffect(() => {
-    if (!brandId) return
+    if (!productId) return
     startTransition(async () => {
       try {
-        const data = await apiGet<Category[]>(`/api/products/brands/${brandId}/categories`)
-        setCategories(data)
+        const p = await apiGet<ProductData>(`/api/products/items/${productId}`)
+        setCategoryName(p.category.name)
+        reset({
+          modelName: p.modelName,
+          modelNumber: p.modelNumber ?? '',
+          sku: p.sku ?? '',
+          description: p.description ?? '',
+          productType: p.productType,
+          unit: p.unit,
+          minimumOrderQty: p.minimumOrderQty,
+          salePrice: p.salePrice ?? '',
+          rentalDailyRate: p.rentalDailyRate ?? '',
+          rentalWeeklyRate: p.rentalWeeklyRate ?? '',
+          rentalMonthlyRate: p.rentalMonthlyRate ?? '',
+          serviceRatePerHour: p.serviceRatePerHour ?? '',
+          isActive: p.isActive,
+        })
+        setLoadError(null)
       } catch {
-        // categories remain empty
+        setLoadError('Failed to load product')
       }
     })
-  }, [brandId])
+  }, [productId, reset])
 
   async function onSubmit(data: FormData) {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      await apiPost(`/api/products/brands/${brandId}/items`, {
-        categoryId: data.categoryId,
+      await apiPatch(`/api/products/items/${productId}`, {
         modelName: data.modelName,
         modelNumber: data.modelNumber || null,
         sku: data.sku || null,
@@ -111,7 +117,7 @@ export default function NewProductPage() {
       })
       router.push(`/products/brands/${brandId}`)
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to create product')
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save product')
     } finally {
       setSubmitting(false)
     }
@@ -123,6 +129,16 @@ export default function NewProductPage() {
         <div className="h-6 bg-[#1e1e1e] rounded w-32" />
         <div className="h-10 bg-[#1e1e1e] rounded" />
         <div className="h-10 bg-[#1e1e1e] rounded" />
+        <div className="h-24 bg-[#1e1e1e] rounded" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 flex flex-col items-center gap-3">
+        <p className="text-gray-500 text-sm">{loadError}</p>
+        <button onClick={() => router.back()} className="text-xs text-amber-400 hover:text-amber-300">Go back</button>
       </div>
     )
   }
@@ -133,7 +149,10 @@ export default function NewProductPage() {
         <button onClick={() => router.push(`/products/brands/${brandId}`)} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-semibold text-gray-100">New Product</h1>
+        <div>
+          <h1 className="text-lg font-semibold text-gray-100">Edit Product</h1>
+          {categoryName && <p className="text-xs text-gray-500">{categoryName}</p>}
+        </div>
       </div>
 
       {submitError && (
@@ -143,51 +162,27 @@ export default function NewProductPage() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Category */}
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">
-            Category <span className="text-red-400">*</span>
-          </label>
-          {categories.length === 0 ? (
-            <p className="text-xs text-amber-400 py-2">
-              No categories found. Add a category to this brand first.
-            </p>
-          ) : (
-            <select {...register('categoryId')} className={fieldClass()}>
-              <option value="">Select category…</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name} ({cat.productType})</option>
-              ))}
-            </select>
-          )}
-          <FieldError message={errors.categoryId?.message} />
-        </div>
-
-        {/* Model Name + Number */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">
               Model Name <span className="text-red-400">*</span>
             </label>
-            <input {...register('modelName')} placeholder="e.g. DHP484" className={fieldClass()} />
+            <input {...register('modelName')} className={fieldClass()} />
             <FieldError message={errors.modelName?.message} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Model Number</label>
-            <input {...register('modelNumber')} placeholder="Part no." className={fieldClass()} />
+            <input {...register('modelNumber')} className={fieldClass()} />
           </div>
         </div>
 
-        {/* SKU + Type */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">SKU</label>
-            <input {...register('sku')} placeholder="Unique SKU" className={fieldClass()} />
+            <input {...register('sku')} className={fieldClass()} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
-              Product Type <span className="text-red-400">*</span>
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Product Type</label>
             <select {...register('productType')} className={fieldClass()}>
               <option value="EQUIPMENT">Equipment</option>
               <option value="CONSUMABLE">Consumable</option>
@@ -196,22 +191,19 @@ export default function NewProductPage() {
           </div>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1.5">Description</label>
           <textarea
             {...register('description')}
             rows={2}
-            placeholder="Brief product description…"
             className={`${fieldClass()} resize-none`}
           />
         </div>
 
-        {/* Unit + Min Qty */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Unit</label>
-            <input {...register('unit')} placeholder="piece, set, box…" className={fieldClass()} />
+            <input {...register('unit')} className={fieldClass()} />
             <FieldError message={errors.unit?.message} />
           </div>
           <div>
@@ -222,17 +214,30 @@ export default function NewProductPage() {
 
         {/* Pricing */}
         <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Pricing (optional)</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Pricing</p>
           <div className="grid grid-cols-2 gap-3">
-            <PriceField label="Sale Price" name="salePrice" register={register} />
-            <PriceField label="Service Rate/hr" name="serviceRatePerHour" register={register} />
-            <PriceField label="Rental Daily Rate" name="rentalDailyRate" register={register} />
-            <PriceField label="Rental Weekly Rate" name="rentalWeeklyRate" register={register} />
-            <PriceField label="Rental Monthly Rate" name="rentalMonthlyRate" register={register} />
+            {[
+              { label: 'Sale Price', name: 'salePrice' },
+              { label: 'Service Rate/hr', name: 'serviceRatePerHour' },
+              { label: 'Rental Daily Rate', name: 'rentalDailyRate' },
+              { label: 'Rental Weekly Rate', name: 'rentalWeeklyRate' },
+              { label: 'Rental Monthly Rate', name: 'rentalMonthlyRate' },
+            ].map(({ label, name }) => (
+              <div key={name}>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
+                <input
+                  {...register(name as Parameters<typeof register>[0])}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className={fieldClass()}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Active */}
         <div className="flex items-center gap-2">
           <input
             {...register('isActive')}
@@ -253,10 +258,10 @@ export default function NewProductPage() {
           </button>
           <button
             type="submit"
-            disabled={submitting || categories.length === 0}
+            disabled={submitting}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium bg-amber-400 text-black rounded-lg hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {submitting ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Create Product</>}
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Save Changes</>}
           </button>
         </div>
       </form>

@@ -21,6 +21,25 @@ const updateProductSchema = z.object({
 
 type RouteParams = { params: Promise<{ id: string }> }
 
+export async function GET(req: NextRequest, { params }: RouteParams) {
+  const user = await requireAuth(req)
+  if (!user) return unauthorized()
+
+  const { id } = await params
+
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: { category: { select: { id: true, name: true, productType: true } } },
+    })
+    if (!product) return notFound('Product not found')
+    return NextResponse.json(product)
+  } catch (err) {
+    console.error('[GET /api/products/items/[id]]', err)
+    return serverError()
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const user = await requireAuth(req)
   if (!user) return unauthorized()

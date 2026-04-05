@@ -3,11 +3,20 @@ import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { requireAuth, writeAuditLog, getIp, unauthorized, forbidden, notFound, badRequest } from '@/lib/middleware'
 
+const lineItemSchema = z.object({
+  productId: z.string().optional().nullable(),
+  description: z.string().min(1, 'Description is required'),
+  qty: z.number().int().min(1),
+  unitPrice: z.number().min(0),
+  discount: z.number().min(0).max(100).default(0),
+})
+
 const patchSchema = z.object({
   status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED']).optional(),
-  notes: z.string().optional(),
-  validUntil: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  validUntil: z.string().optional().nullable(),
   taxRate: z.number().min(0).max(100).optional(),
+  lineItems: z.array(lineItemSchema).min(1).optional(),
 })
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -55,7 +64,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = patchSchema.safeParse(body)
   if (!parsed.success) return badRequest(parsed.error.message)
 
-  const { status, ...rest } = parsed.data
+  const { status, lineItems, ...rest } = parsed.data
 
   // Validate status transitions
   if (status) {
@@ -72,13 +81,63 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Line items can only be changed on DRAFT quotes
+  if (lineItems && quote.status !== 'DRAFT') {
+    return badRequest('Line items can only be edited on DRAFT quotes')
+  }
+
   const updateData: Record<string, unknown> = { ...rest }
   if (status) updateData.status = status
-  if (rest.validUntil) updateData.validUntil = new Date(rest.validUntil)
+  if (rest.validUntil !== undefined) updateData.validUntil = rest.validUntil ? new Date(rest.validUntil) : null
   if (status === 'ACCEPTED') updateData.approvedById = user.id
 
-  const updated = await prisma.quote.update({ where: { id }, data: updateData })
+  // Recalculate totals if line items or taxRate changed
+  if (lineItems) {
+    const taxRate = rest.taxRate ?? quote.taxRate
+    const lineItemsData = lineItems.map((item) => {
+      const lineSubtotal = item.qty * item.unitPrice * (1 - item.discount / 100)
+      return {
+        productId: item.productId ?? null,
+        description: item.description,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        subtotal: Math.round(lineSubtotal * 100) / 100,
+      }
+    })
+    const subtotal = lineItemsData.reduce((sum, li) => sum + li.subtotal, 0)
+    const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100
+    updateData.subtotal = subtotal
+    updateData.taxAmount = taxAmount
+    updateData.total = Math.round((subtotal + taxAmount) * 100) / 100
 
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.quoteLineItem.deleteMany({ where: { quoteId: id } })
+      return tx.quote.update({
+        where: { id },
+        data: {
+          ...updateData,
+          lineItems: { create: lineItemsData },
+        },
+        include: {
+          lineItems: { include: { product: { select: { id: true, modelName: true, sku: true } } } },
+          lead: { select: { id: true, title: true, customer: { select: { companyName: true } } } },
+        },
+      })
+    })
+    await writeAuditLog(user.id, 'UPDATE', 'Quote', id, quote, updated, getIp(req))
+    return NextResponse.json(updated)
+  }
+
+  // Recalculate totals if only taxRate changed
+  if (rest.taxRate !== undefined) {
+    const taxRate = rest.taxRate
+    const taxAmount = Math.round(quote.subtotal * (taxRate / 100) * 100) / 100
+    updateData.taxAmount = taxAmount
+    updateData.total = Math.round((quote.subtotal + taxAmount) * 100) / 100
+  }
+
+  const updated = await prisma.quote.update({ where: { id }, data: updateData })
   await writeAuditLog(user.id, 'UPDATE', 'Quote', id, quote, updated, getIp(req))
   return NextResponse.json(updated)
 }

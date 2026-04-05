@@ -30,3 +30,73 @@ body {
 ::-webkit-scrollbar-track { background: #111111; }
 ::-webkit-scrollbar-thumb { background: #262626; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #404040; }
+
+/* ── Light Mode ── */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="light"] body {
+  background: #f5f5f5;
+  color: #111827;
+}
+
+[data-theme="light"] * {
+  border-color: #e5e7eb;
+}
+
+/* Backgrounds */
+[data-theme="light"] .bg-\[\#0a0a0a\] { background-color: #f5f5f5; }
+[data-theme="light"] .bg-\[\#0d0d0d\] { background-color: #f9fafb; }
+[data-theme="light"] .bg-\[\#111111\] { background-color: #ffffff; }
+[data-theme="light"] .bg-\[\#141414\] { background-color: #fafafa; }
+[data-theme="light"] .bg-\[\#161616\] { background-color: #f8f8f8; }
+[data-theme="light"] .bg-\[\#1a1a1a\] { background-color: #f3f4f6; }
+[data-theme="light"] .bg-\[\#1e1e1e\] { background-color: #ececec; }
+[data-theme="light"] .bg-\[\#262626\] { background-color: #e5e7eb; }
+
+/* Hover backgrounds */
+[data-theme="light"] .hover\:bg-\[\#111111\]:hover { background-color: #f5f5f5; }
+[data-theme="light"] .hover\:bg-\[\#141414\]:hover { background-color: #f0f0f0; }
+[data-theme="light"] .hover\:bg-\[\#161616\]:hover { background-color: #efefef; }
+[data-theme="light"] .hover\:bg-\[\#1a1a1a\]:hover { background-color: #e8eaed; }
+[data-theme="light"] .hover\:bg-\[\#1e1e1e\]:hover { background-color: #e5e7eb; }
+[data-theme="light"] .hover\:bg-\[\#262626\]:hover { background-color: #e0e3e8; }
+
+/* Borders */
+[data-theme="light"] .border-\[\#1a1a1a\] { border-color: #f3f4f6; }
+[data-theme="light"] .border-\[\#262626\] { border-color: #e5e7eb; }
+[data-theme="light"] .border-\[\#2a2a2a\] { border-color: #dde1e7; }
+[data-theme="light"] .border-\[\#333333\] { border-color: #d1d5db; }
+[data-theme="light"] .border-\[\#333\] { border-color: #d1d5db; }
+[data-theme="light"] .border-\[\#444444\] { border-color: #c0c4cc; }
+[data-theme="light"] .hover\:border-\[\#333\]:hover { border-color: #9ca3af; }
+[data-theme="light"] .hover\:border-\[\#333333\]:hover { border-color: #9ca3af; }
+
+/* Divide */
+[data-theme="light"] .divide-\[\#111111\] > * + * { border-color: #f5f5f5; }
+[data-theme="light"] .divide-\[\#1a1a1a\] > * + * { border-color: #f3f4f6; }
+[data-theme="light"] .divide-\[\#262626\] > * + * { border-color: #e5e7eb; }
+
+/* Text — flip gray scale for readability */
+[data-theme="light"] .text-gray-100 { color: #111827; }
+[data-theme="light"] .text-gray-200 { color: #1f2937; }
+[data-theme="light"] .text-gray-300 { color: #374151; }
+[data-theme="light"] .text-gray-400 { color: #4b5563; }
+[data-theme="light"] .text-gray-500 { color: #6b7280; }
+[data-theme="light"] .text-gray-600 { color: #9ca3af; }
+[data-theme="light"] .text-gray-700 { color: #c0c0c0; }
+
+/* Hover text */
+[data-theme="light"] .hover\:text-gray-100:hover { color: #111827; }
+[data-theme="light"] .hover\:text-gray-200:hover { color: #1f2937; }
+[data-theme="light"] .hover\:text-gray-300:hover { color: #374151; }
+[data-theme="light"] .hover\:text-gray-400:hover { color: #4b5563; }
+
+/* Placeholder */
+[data-theme="light"] .placeholder-gray-600::placeholder { color: #9ca3af; }
+
+/* Scrollbar */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #f3f4f6; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #d1d5db; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }

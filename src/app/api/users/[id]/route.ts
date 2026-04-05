@@ -8,7 +8,9 @@ const updateSchema = z.object({
   lastName: z.string().min(1).optional(),
   role: z.enum(['REP', 'MANAGER', 'PRODUCT_MANAGER', 'ADMIN']).optional(),
   isActive: z.boolean().optional(),
-  phone: z.string().optional(),
+  phone: z.string().optional().nullable(),
+  managerId: z.string().nullable().optional(),
+  brandIds: z.array(z.string()).optional(),
 })
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     select: {
       id: true, email: true, firstName: true, lastName: true, role: true,
       phone: true, isActive: true, createdAt: true,
-      assignedBrands: { include: { brand: { select: { id: true, name: true } } } },
+      manager: { select: { id: true, firstName: true, lastName: true } },
+      subordinates: { select: { id: true, firstName: true, lastName: true, isActive: true } },
+      assignedBrands: { select: { brand: { select: { id: true, name: true } } } },
     },
   })
   if (!found) return notFound()
@@ -41,7 +45,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) return badRequest(parsed.error.message)
 
-  const updated = await prisma.user.update({ where: { id }, data: parsed.data })
+  const { brandIds, ...userData } = parsed.data
+
+  // Clear manager if role is not REP
+  if (userData.role && userData.role !== 'REP') {
+    userData.managerId = null
+  }
+
+  const updated = await prisma.user.update({ where: { id }, data: userData })
+
+  // Sync PM brand assignments
+  if (brandIds !== undefined) {
+    const uniqueBrandIds = [...new Set(brandIds)]
+    await prisma.$transaction(async (tx) => {
+      await tx.productManagerBrand.deleteMany({ where: { userId: id } })
+      if (uniqueBrandIds.length > 0) {
+        await tx.productManagerBrand.createMany({
+          data: uniqueBrandIds.map((brandId) => ({ userId: id, brandId })),
+        })
+      }
+    })
+  }
+
   await writeAuditLog(authUser.id, 'UPDATE', 'User', id, target, updated, getIp(req))
   return NextResponse.json(updated)
 }
@@ -56,7 +81,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!target) return notFound()
 
   await writeAuditLog(authUser.id, 'DELETE', 'User', id, target, null, getIp(req))
-  // Soft-delete
   await prisma.user.update({ where: { id }, data: { isActive: false } })
   return NextResponse.json({ ok: true })
 }

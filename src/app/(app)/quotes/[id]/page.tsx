@@ -6,7 +6,7 @@ import { apiGet, apiPatch } from '@/lib/apiClient'
 import { formatCurrency, formatDate } from '@/utils/format'
 import QuoteStatusBadge from '@/components/quotes/QuoteStatusBadge'
 import { useAuthStore } from '@/store/authStore'
-import { ArrowLeft, Download, Send, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { ArrowLeft, Download, Send, CheckCircle, XCircle, Clock, Pencil } from 'lucide-react'
 
 interface LineItem {
   id: string
@@ -109,6 +109,15 @@ export default function QuoteDetailPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-wrap">
+          {quote.status === 'DRAFT' && (
+            <Link
+              href={`/quotes/${id}/edit`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#262626] text-xs text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a] transition-colors"
+            >
+              <Pencil size={12} />
+              Edit
+            </Link>
+          )}
           {actions.map((action) => (
             <button
               key={action.status}

@@ -9,10 +9,17 @@ import { ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { apiGet, apiPut } from '@/lib/apiClient'
 import type { Customer } from '@/types'
 
+interface RepUser {
+  id: string
+  firstName: string
+  lastName: string
+}
+
 const schema = z.object({
   companyName: z.string().min(1, 'Company name is required'),
   industry: z.enum(['CONSTRUCTION', 'INDUSTRIAL_FACTORY', 'OTHER']),
   tier: z.enum(['PROSPECT', 'ACTIVE', 'VIP', 'INACTIVE']),
+  assignedRepId: z.string().optional(),
   billingAddress: z.string().optional(),
   website: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -35,6 +42,7 @@ export default function EditCustomerPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [reps, setReps] = useState<RepUser[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -47,11 +55,16 @@ export default function EditCustomerPage() {
     if (!id) return
     startTransition(async () => {
       try {
-        const customer = await apiGet<Customer>(`/api/customers/${id}`)
+        const [customer, repList] = await Promise.all([
+          apiGet<Customer & { assignedRepId?: string | null }>(`/api/customers/${id}`),
+          apiGet<RepUser[]>('/api/users?role=REP').catch(() => [] as RepUser[]),
+        ])
+        setReps(repList)
         reset({
           companyName: customer.companyName,
           industry: customer.industry,
           tier: customer.tier,
+          assignedRepId: customer.assignedRepId ?? '',
           billingAddress: customer.billingAddress ?? '',
           website: customer.website ?? '',
           registrationNumber: customer.registrationNumber ?? '',
@@ -72,6 +85,7 @@ export default function EditCustomerPage() {
         companyName: data.companyName,
         industry: data.industry,
         tier: data.tier,
+        assignedRepId: data.assignedRepId || null,
         billingAddress: data.billingAddress || null,
         website: data.website || null,
         registrationNumber: data.registrationNumber || null,
@@ -84,10 +98,6 @@ export default function EditCustomerPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  if (isPending || (loadError === null && !errors.companyName)) {
-    // Show skeleton only while loading (before form is populated)
   }
 
   if (isPending) {
@@ -151,6 +161,16 @@ export default function EditCustomerPage() {
               <option value="INACTIVE">Inactive</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1.5">Assigned Rep</label>
+          <select {...register('assignedRepId')} className={fieldClass()}>
+            <option value="">— Unassigned —</option>
+            {reps.map((r) => (
+              <option key={r.id} value={r.id}>{r.firstName} {r.lastName}</option>
+            ))}
+          </select>
         </div>
 
         <div>

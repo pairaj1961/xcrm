@@ -2,11 +2,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { apiGet, apiPut, apiGet as apiBrandsGet } from '@/lib/apiClient'
 import { useAuthStore } from '@/store/authStore'
+import { useThemeStore } from '@/store/themeStore'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { cn } from '@/lib/cn'
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Loader2, CheckCircle, Sun, Moon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const settingsSchema = z.object({
@@ -16,7 +17,7 @@ const settingsSchema = z.object({
 })
 type SettingsData = z.infer<typeof settingsSchema>
 
-type Tab = 'general' | 'users' | 'brands'
+type Tab = 'general' | 'appearance' | 'users' | 'brands'
 
 interface TeamUser {
   id: string; email: string; firstName: string; lastName: string; role: string; isActive: boolean
@@ -26,6 +27,7 @@ interface Brand { id: string; name: string }
 
 export default function SettingsPage() {
   const { user, isLoading } = useAuthStore()
+  const { theme, setTheme } = useThemeStore()
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('general')
   const [saved, setSaved] = useState(false)
@@ -89,7 +91,7 @@ export default function SettingsPage() {
     <div className="p-4 md:p-6 max-w-3xl space-y-6">
       {/* Tabs */}
       <div className="flex gap-1 bg-[#111111] border border-[#262626] rounded-lg p-1 w-fit">
-        {(['general', 'users', 'brands'] as Tab[]).map((t) => (
+        {(['general', 'appearance', 'users', 'brands'] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={cn('px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors', tab === t ? 'bg-amber-400 text-black' : 'text-gray-400 hover:text-gray-200')}
           >
@@ -123,6 +125,44 @@ export default function SettingsPage() {
             {saved ? 'Saved!' : 'Save Settings'}
           </button>
         </form>
+      )}
+
+      {/* Appearance */}
+      {tab === 'appearance' && (
+        <div className="bg-[#111111] border border-[#262626] rounded-xl p-6 space-y-5">
+          <h2 className="text-sm font-semibold text-gray-300">Appearance</h2>
+          <div>
+            <p className="text-xs text-gray-500 mb-3">Choose between dark and light interface.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTheme('dark')}
+                className={cn(
+                  'flex-1 flex flex-col items-center gap-2.5 px-4 py-5 rounded-xl border-2 transition-colors',
+                  theme === 'dark'
+                    ? 'border-amber-400 bg-amber-400/5'
+                    : 'border-[#262626] hover:border-[#333333]'
+                )}
+              >
+                <Moon size={22} className={theme === 'dark' ? 'text-amber-400' : 'text-gray-500'} />
+                <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-amber-400' : 'text-gray-400')}>Dark</span>
+                {theme === 'dark' && <span className="text-[10px] text-amber-400/70">Active</span>}
+              </button>
+              <button
+                onClick={() => setTheme('light')}
+                className={cn(
+                  'flex-1 flex flex-col items-center gap-2.5 px-4 py-5 rounded-xl border-2 transition-colors',
+                  theme === 'light'
+                    ? 'border-amber-400 bg-amber-400/5'
+                    : 'border-[#262626] hover:border-[#333333]'
+                )}
+              >
+                <Sun size={22} className={theme === 'light' ? 'text-amber-400' : 'text-gray-500'} />
+                <span className={cn('text-sm font-medium', theme === 'light' ? 'text-amber-400' : 'text-gray-400')}>Light</span>
+                {theme === 'light' && <span className="text-[10px] text-amber-400/70">Active</span>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Users */}
