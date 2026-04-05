@@ -5,8 +5,6 @@ import prisma from '@/lib/prisma'
 import { requireAuth, requireRole, writeAuditLog, getIp, unauthorized, forbidden, badRequest } from '@/lib/middleware'
 import { hashPassword } from '@/lib/auth'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const createSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
@@ -75,6 +73,7 @@ export async function POST(req: NextRequest) {
 
   // Send invite email
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const resend = new Resend(process.env.RESEND_API_KEY)
   await resend.emails.send({
     from: 'xCRM <noreply@xcrm.app>',
     to: newUser.email,

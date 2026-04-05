@@ -4,8 +4,6 @@ import { randomBytes } from 'crypto'
 import { Resend } from 'resend'
 import prisma from '@/lib/prisma'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const schema = z.object({ email: z.string().email() })
 
 export async function POST(req: NextRequest) {
@@ -30,6 +28,7 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const resetUrl = `${appUrl}/reset-password?token=${token}`
 
+  const resend = new Resend(process.env.RESEND_API_KEY)
   await resend.emails.send({
     from: 'xCRM <noreply@xcrm.app>',
     to: user.email,
