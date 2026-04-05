@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -51,7 +51,7 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-red-400 mt-1">{message}</p>
 }
 
-export default function NewQuotePage() {
+function NewQuoteForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const defaultLeadId = searchParams.get('leadId') ?? ''
@@ -307,5 +307,13 @@ export default function NewQuotePage() {
         </div>
       </form>
     </div>
+  )
+}
+
+export default function NewQuotePage() {
+  return (
+    <Suspense fallback={null}>
+      <NewQuoteForm />
+    </Suspense>
   )
 }
