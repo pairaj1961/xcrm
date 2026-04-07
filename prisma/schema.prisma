@@ -6,12 +6,21 @@ datasource db {
   provider = "postgresql"
 }
 
+// ── Shared models (used by xCRM and any future apps) ──────────────────────────
+// User, Brand, ProductCategory, Product, Customer, CustomerSite,
+// SiteContact, ProductManagerBrand are intentionally kept in this schema.
+
 model User {
   id             String    @id @default(cuid())
   email          String    @unique
   passwordHash   String    @map("password_hash")
   firstName      String    @map("first_name")
   lastName       String    @map("last_name")
+  // role values: SYSTEM_ADMIN | SALES_MANAGER | SALES_REP | PRODUCTION_MANAGER
+  // SYSTEM_ADMIN        — full access: users, settings, brands, products
+  // SALES_MANAGER       — all SALES_REP permissions + approve quotes, view targets
+  // SALES_REP           — create/edit leads, quotes, activities
+  // PRODUCTION_MANAGER  — manage brands, products; assigned via ProductManagerBrand
   role           String
   phone          String?
   avatarUrl      String?   @map("avatar_url")
@@ -343,6 +352,7 @@ model AuditLog {
 
 model Settings {
   id          String   @id @default("singleton")
+  appName     String   @default("xCRM Platform") @map("app_name")
   companyName String   @default("xCRM") @map("company_name")
   taxRate     Float    @default(7) @map("tax_rate")
   currency    String   @default("THB")
