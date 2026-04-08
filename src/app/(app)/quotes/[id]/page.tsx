@@ -6,7 +6,7 @@ import { apiGet, apiPatch } from '@/lib/apiClient'
 import { formatCurrency, formatDate } from '@/utils/format'
 import QuoteStatusBadge from '@/components/quotes/QuoteStatusBadge'
 import { useAuthStore } from '@/store/authStore'
-import { ArrowLeft, Download, Send, CheckCircle, XCircle, Clock, Pencil } from 'lucide-react'
+import { ArrowLeft, Download, Send, CheckCircle, XCircle, Clock, Pencil, ExternalLink } from 'lucide-react'
 
 interface LineItem {
   id: string
@@ -129,6 +129,17 @@ export default function QuoteDetailPage() {
               {action.label}
             </button>
           ))}
+          {quote.status === 'ACCEPTED' && (
+            <a
+              href={`http://localhost:3001/contracts/new?quoteId=${id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500/30 text-xs font-medium text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-colors"
+            >
+              <ExternalLink size={12} />
+              Create Rental Contract
+            </a>
+          )}
           <a
             href={`/api/quotes/${id}/pdf`}
             target="_blank"

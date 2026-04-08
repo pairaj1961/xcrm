@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, X, Check, Calendar, Building,
   MapPin, User, Tag, FileText, Package, Activity, Quote, StickyNote,
-  ChevronDown,
+  ChevronDown, ClipboardCheck,
 } from 'lucide-react'
 import { apiGet, apiPatch, apiPost, apiDelete } from '@/lib/apiClient'
 import { cn } from '@/lib/cn'
@@ -593,6 +593,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasContract, setHasContract] = useState(false)
 
   const fetchLead = useCallback(async () => {
     try {
@@ -608,6 +609,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     fetchLead()
   }, [fetchLead])
+
+  // Check if a rental contract was created from any quote on this lead
+  useEffect(() => {
+    fetch(`/api/leads/${id}/rental-status`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { hasContract: boolean }) => setHasContract(d.hasContract))
+      .catch(() => setHasContract(false))
+  }, [id])
 
   async function handleStatusChange(status: LeadStatus) {
     if (!lead) return
@@ -682,6 +691,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 <PriorityBadge priority={lead.priority} size="sm" />
                 {lead.dealValue && (
                   <span className="text-xs text-amber-400 font-medium">{formatCurrency(lead.dealValue)}</span>
+                )}
+                {hasContract && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded border bg-teal-500/10 text-teal-400 border-teal-500/20">
+                    <ClipboardCheck size={10} />
+                    Contract Created
+                  </span>
                 )}
               </div>
             </div>

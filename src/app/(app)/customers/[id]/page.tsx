@@ -5,13 +5,30 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Building2, MapPin, Globe, FileText, Users, Phone, Mail,
-  Pencil, ExternalLink, Trash2, Plus, UserCircle,
+  Pencil, ExternalLink, Trash2, Plus, UserCircle, ClipboardList,
 } from 'lucide-react'
 import { apiGet, apiDelete } from '@/lib/apiClient'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/cn'
 import { formatDate, formatRelativeDate, formatCurrency, formatStatus } from '@/utils/format'
 import type { Customer, CustomerSite, Lead, CustomerTier, LeadStatus } from '@/types'
+
+interface CustomerRental {
+  contractNumber: string
+  status: string
+  startDate: string | null
+  endDate: string | null
+  totalAmount: number
+  equipmentCount: number
+}
+
+const RENTAL_STATUS_COLORS: Record<string, string> = {
+  DRAFT:     'text-gray-400',
+  ACTIVE:    'text-teal-400',
+  EXTENDED:  'text-blue-400',
+  COMPLETED: 'text-gray-500',
+  CANCELLED: 'text-red-400',
+}
 
 interface CustomerDetail extends Customer {
   assignedRep?: { id: string; firstName: string; lastName: string } | null
@@ -56,7 +73,7 @@ const SITE_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 }
 
-type Tab = 'info' | 'sites' | 'leads'
+type Tab = 'info' | 'sites' | 'leads' | 'rentals'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -68,8 +85,20 @@ export default function CustomerDetailPage() {
   const [tab, setTab] = useState<Tab>('info')
   const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null)
   const [deletingCustomer, setDeletingCustomer] = useState(false)
+  const [rentals, setRentals] = useState<CustomerRental[] | null>(null)
+  const [rentalsLoading, setRentalsLoading] = useState(false)
 
   const isAdmin = user?.role === 'ADMIN'
+
+  // Lazy-load rental contracts when the tab is first opened
+  useEffect(() => {
+    if (tab !== 'rentals' || rentals !== null || !id) return
+    setRentalsLoading(true)
+    apiGet<CustomerRental[]>(`/api/customers/${id}/rentals`)
+      .then((data) => setRentals(data))
+      .catch(() => setRentals([]))
+      .finally(() => setRentalsLoading(false))
+  }, [tab, id, rentals])
 
   useEffect(() => {
     if (!id) return
@@ -180,6 +209,7 @@ export default function CustomerDetailPage() {
           ['info', 'Company Info'],
           ['sites', `Sites (${customer.sites.length})`],
           ['leads', `Leads (${customer.leads.length})`],
+          ['rentals', rentals !== null ? `Rentals (${rentals.length})` : 'Rentals'],
         ] as [Tab, string][]).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             className={cn('flex-1 py-2 text-xs font-medium rounded-lg transition-colors',
@@ -349,6 +379,89 @@ export default function CustomerDetailPage() {
                           </button>
                         )}
                       </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Active Rentals Tab */}
+      {tab === 'rentals' && (
+        <div className="bg-[#111111] border border-[#262626] rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+              <ClipboardList size={14} className="text-gray-600" />
+              Rental Contracts
+            </div>
+            <a
+              href={`http://localhost:3001/contracts/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 transition-colors"
+            >
+              <Plus size={12} /> New Contract
+            </a>
+          </div>
+          {rentalsLoading ? (
+            <div className="px-4 py-8 text-center">
+              <div className="inline-block w-5 h-5 border-2 border-[#333] border-t-teal-400 rounded-full animate-spin" />
+            </div>
+          ) : rentals === null || rentals.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ClipboardList size={28} className="text-gray-700 mb-2" />
+              <p className="text-sm text-gray-500">No rental contracts</p>
+              <a
+                href="http://localhost:3001/contracts/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 text-xs text-teal-400 hover:text-teal-300 transition-colors"
+              >
+                + Create first contract
+              </a>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#1a1a1a]">
+                  <th className="text-left text-xs text-gray-600 font-medium px-4 py-2.5 uppercase tracking-wider">Contract #</th>
+                  <th className="text-left text-xs text-gray-600 font-medium px-4 py-2.5 uppercase tracking-wider">Status</th>
+                  <th className="text-left text-xs text-gray-600 font-medium px-4 py-2.5 uppercase tracking-wider hidden sm:table-cell">Period</th>
+                  <th className="text-center text-xs text-gray-600 font-medium px-4 py-2.5 uppercase tracking-wider hidden md:table-cell">Items</th>
+                  <th className="text-right text-xs text-gray-600 font-medium px-4 py-2.5 uppercase tracking-wider">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1a1a1a]">
+                {rentals.map((rc) => (
+                  <tr key={rc.contractNumber} className="hover:bg-[#161616] transition-colors">
+                    <td className="px-4 py-3">
+                      <a
+                        href={`http://localhost:3001/contracts`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1"
+                      >
+                        {rc.contractNumber}
+                        <ExternalLink size={10} />
+                      </a>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn('text-xs font-medium', RENTAL_STATUS_COLORS[rc.status] ?? 'text-gray-400')}>
+                        {rc.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">
+                      {rc.startDate ? formatDate(rc.startDate) : '—'}
+                      {' – '}
+                      {rc.endDate ? formatDate(rc.endDate) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs text-gray-400 hidden md:table-cell">
+                      {rc.equipmentCount}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-gray-200">
+                      {rc.totalAmount ? formatCurrency(rc.totalAmount) : '—'}
                     </td>
                   </tr>
                 ))}
