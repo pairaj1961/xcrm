@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Users,
@@ -13,6 +14,7 @@ import {
   Shield,
   UserCog,
   X,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/store/authStore'
@@ -35,6 +37,15 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user } = useAuthStore()
   const { sidebarOpen, setSidebarOpen } = useUIStore()
+  const [rentalBadge, setRentalBadge] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/rental/stats', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { activeRentalCustomers: number }) => setRentalBadge(d.activeRentalCustomers ?? 0))
+      .catch(() => setRentalBadge(0))
+  }, [user])
 
   const visibleItems = navItems.filter((item) => user && item.roles.includes(user.role))
 
@@ -92,6 +103,25 @@ export default function Sidebar() {
             )
           })}
         </nav>
+
+        {/* Rental APP link */}
+        <div className="border-t border-[#262626] mt-2 pt-2 px-2">
+          <a
+            href="http://localhost:3001"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-[#1a1a1a] hover:text-gray-100 transition-colors"
+          >
+            <ExternalLink size={16} />
+            <span className="flex-1">Rental APP</span>
+            {rentalBadge > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-400 min-w-[18px] text-center">
+                {rentalBadge}
+              </span>
+            )}
+          </a>
+        </div>
 
         {/* User */}
         {user && (
